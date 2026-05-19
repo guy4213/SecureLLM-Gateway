@@ -8,7 +8,10 @@ import type { SecurityContext } from '../types/express-extensions';
 
 function makeSecurityContext(): SecurityContext {
   return {
+    correlationId: 'test-correlation-id',
     requestStart: Date.now(),
+    sealedPiiMap: null,
+    cacheHit: false,
     injectionDetected: false,
     injectionTypes: [],
     detectedPayloads: [],
