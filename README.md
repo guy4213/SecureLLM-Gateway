@@ -259,6 +259,98 @@ The test suite covers: Appendix A injection corpus (25 tests), PII-D1/D2/D3 scen
 
 ---
 
+### PII Redaction & Reversibility Architecture
+
+#### How it works
+
+Every inbound message is scanned for three categories of personal data — **email addresses**, **phone numbers** (Israeli mobile/landline + international E.164), and **Israeli national IDs** (Luhn-validated). Each value is replaced in-place with a deterministic reversible token before the prompt reaches OpenAI.
+
+The token→original mapping is encrypted using **AES-256-GCM** (authenticated encryption) with a fresh 96-bit random IV generated per request. The resulting subdocument is stored inside the MongoDB audit record:
+
+```json
+"sealedPiiMap": {
+  "iv":   "<base64, 12 bytes — unique per request>",
+  "tag":  "<base64, 16 bytes — GCM authentication tag>",
+  "data": "<base64, AES-256-GCM ciphertext>"
+}
+```
+
+No plaintext PII is written to MongoDB or Redis at any point. The GCM authentication tag means any tampering with the stored ciphertext is detected and rejected before a single byte of plaintext is returned.
+
+#### Verified working — live terminal output
+
+```bash
+# 1. Send a request containing real PII
+curl -X POST "http://localhost:3000/v1/chat" \
+  -H "x-api-key: <client-key>" \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"email: guy@hit.ac.il, phone: 052-1234567, ID: 123456782"}]}'
+# → 200 OK — LLM received <PII_EMAIL_1>, <PII_PHONE_1>, <PII_IL_ID_1>, not the real values
+
+# 2. Admin recovers original values from the audit log
+curl -X GET "http://localhost:3000/v1/audit/6a0c2e079caf5e9c3db39f8b/reveal" \
+  -H "x-api-key: <admin-key>"
+```
+
+**Actual response (verified):**
+```json
+{
+  "correlationId": "b8390419-a580-403a-bcd5-a30b4536b7d4",
+  "tokens": {
+    "<PII_EMAIL_1>": "guy@hit.ac.il",
+    "<PII_PHONE_1>": "052-1234567",
+    "<PII_IL_ID_1>": "123456782"
+  }
+}
+```
+
+Recovery is gated behind `role: admin` RBAC. A `client` key receives `403 Forbidden`. The decryption key (`PII_ENC_KEY`) never leaves the server environment.
+
+---
+
+## Security & Compliance: PII Reversibility Architecture
+
+The gateway enforces a **zero plaintext** policy: personal data is never written to any persistent store in its original form.
+
+```
+Inbound request
+  │
+  ▼
+[PIIRedactor] ── detects email / phone / IL-ID
+  │               replaces with <PII_EMAIL_1> etc.
+  │               builds token → original Map in memory
+  │
+  ├──► req.piiMap (in-memory, per-request lifetime only)
+  │
+  └──► AES-256-GCM encrypt(Map, PII_ENC_KEY, random IV)
+         │
+         ▼
+       { iv, tag, data }  ←── stored in AuditLog.sealedPiiMap (MongoDB)
+                               no plaintext PII in DB or Redis
+
+Admin recovery path (RBAC: role=admin only)
+  GET /v1/audit/:id/reveal
+    │
+    └──► AES-256-GCM decrypt(sealedPiiMap, PII_ENC_KEY)
+           │
+           ▼
+         { "<PII_EMAIL_1>": "john@example.com", ... }
+```
+
+### Why AES-256-GCM
+
+AES-256-GCM is an **authenticated encryption** scheme. The 16-byte authentication tag (`tag` field) cryptographically binds the ciphertext to the IV and key. Any bit-flip in the stored ciphertext causes decryption to throw before returning a single byte — preventing silent data corruption or tampering. A non-authenticated mode (e.g. AES-CBC) would decrypt corrupted data silently.
+
+### Key management
+
+`PII_ENC_KEY` is a 32-byte key supplied as a hex environment variable. Each request uses a **fresh 96-bit random IV**, so encrypting the same mapping twice produces different ciphertexts. In production, `PII_ENC_KEY` should be managed by a KMS (AWS KMS, HashiCorp Vault) with automatic rotation and per-request envelope encryption.
+
+### Access control
+
+The `/v1/audit/:id/reveal` endpoint requires `role: admin`. Standard client keys receive `403 Forbidden`. The key hash and role are validated on every request with `crypto.timingSafeEqual` to prevent timing-based enumeration.
+
+---
+
 ## Known limitations
 
 - **PII key management**: `PII_ENC_KEY` is read from an environment variable. Production deployments should use a KMS (AWS KMS, HashiCorp Vault) with automatic key rotation and per-request envelope encryption.

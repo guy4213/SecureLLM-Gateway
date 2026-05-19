@@ -19,7 +19,6 @@ export const authenticate: RequestHandler = async (req, res, next) => {
   }
 
   const keyHash = hashApiKey(rawKey.trim());
-
   try {
     // Lean query — we only need id + role, avoid loading the full document into mongoose
     const record = await ApiKeyModel
@@ -34,7 +33,6 @@ export const authenticate: RequestHandler = async (req, res, next) => {
       res.status(401).json({ error: 'Unauthorized: invalid or inactive API key' });
       return;
     }
-
     req.client = {
       id: record._id.toString(),
       role: record.role as ApiKeyRole,

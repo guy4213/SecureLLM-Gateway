@@ -3,7 +3,7 @@ import { env } from '../config/env';
 import { logger } from '../utils/logger';
 
 let client: Redis | null = null;
-
+const MAX_RECONNECT_ATTEMPTS = 10;
 export function getRedisClient(): Redis {
   if (client === null) {
     throw new Error(
@@ -21,12 +21,12 @@ export async function connectRedis(): Promise<Redis> {
   const redis = new Redis(env.REDIS_URI, {
     // Exponential back-off: 200 ms → 400 → 800 … cap at 10 s
     retryStrategy(times: number): number | null {
-      if (times > 10) {
+      if (times > MAX_RECONNECT_ATTEMPTS) {
         logger.fatal('Redis max retry attempts reached — giving up');
         return null;
       }
       const delay = Math.min(200 * 2 ** (times - 1), 10_000);
-      logger.warn({ attempt: times, maxAttempts: 10, retryInMs: delay }, 'Redis retry scheduled');
+      logger.warn({ attempt: times, maxAttempts: MAX_RECONNECT_ATTEMPTS, retryInMs: delay }, 'Redis retry scheduled');
       return delay;
     },
     enableReadyCheck: true,

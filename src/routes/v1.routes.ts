@@ -33,6 +33,7 @@ v1Router.post(
 /**
  * GET /v1/audit
  * Admin-only access. auditLogger still records the request.
+ * auditLogger → authenticate → requireRole('admin') → getAuditLogs
  */
 v1Router.get(
   '/audit',
@@ -45,6 +46,7 @@ v1Router.get(
 /**
  * GET /v1/audit/:id/reveal
  * Admin-only. Decrypts the sealed PII map for a specific audit log entry.
+ * auditLogger → authenticate → requireRole('admin') → revealPiiMap
  */
 v1Router.get(
   '/audit/:id/reveal',
