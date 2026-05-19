@@ -23,7 +23,7 @@ const authState  = vi.hoisted(() => ({
 }));
 const mongoState = vi.hoisted(() => ({ connected: false }));
 // Single stable reference to the Redis eval spy so vi.clearAllMocks() can track it
-const mockEval   = vi.hoisted(() => vi.fn<unknown[], Promise<[number, number, number]>>());
+const mockEval   = vi.hoisted(() => vi.fn<(...args: unknown[]) => Promise<[number, number, number]>>());
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
 vi.mock('../database/mongo', () => ({
