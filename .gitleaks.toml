@@ -1,0 +1,52 @@
+title = "SecureLLM Gateway — Gitleaks Configuration"
+
+[allowlist]
+  description = "Safe paths that may contain pattern-like content for legitimate reasons"
+  paths = [
+    '''.gitleaks\.toml''',
+    '''\.env\.example''',
+    '''vitest\.config\.ts''',
+  ]
+  regexes = [
+    # Regex patterns used by the output-validator are not real secrets
+    '''AKIA[0-9A-Z]\{16\}''',
+    '''sk-[a-zA-Z0-9]\{20''',
+  ]
+
+[[rules]]
+  id = "openai-api-key"
+  description = "OpenAI API Key"
+  regex = '''sk-[a-zA-Z0-9]{20,}'''
+  tags = ["api-key", "openai"]
+
+[[rules]]
+  id = "anthropic-api-key"
+  description = "Anthropic API Key"
+  regex = '''sk-ant-[a-zA-Z0-9\-_]{20,}'''
+  tags = ["api-key", "anthropic"]
+
+[[rules]]
+  id = "aws-access-key-id"
+  description = "AWS Access Key ID"
+  regex = '''AKIA[0-9A-Z]{16}'''
+  tags = ["api-key", "aws"]
+
+[[rules]]
+  id = "aws-secret-access-key"
+  description = "AWS Secret Access Key"
+  regex = '''(?i)aws[_\-\.]?secret[_\-\.]?access[_\-\.]?key\s*=\s*['"a-zA-Z0-9/+=]{40}'''
+  tags = ["secret", "aws"]
+
+[[rules]]
+  id = "jwt-token"
+  description = "JSON Web Token"
+  regex = '''eyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}'''
+  tags = ["jwt", "secret"]
+
+[[rules]]
+  id = "generic-api-key"
+  description = "Generic high-entropy API key assignment"
+  regex = '''(?i)(api_?key|apikey|api_?token)\s*[=:]\s*['"]?[a-zA-Z0-9_\-]{32,}['"]?'''
+  tags = ["api-key"]
+  [rules.allowlist]
+    regexes = ['''process\.env''', '''OPENAI_API_KEY''']

@@ -1,0 +1,26 @@
+# Environment — never commit real keys
+.env
+.env.local
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Test coverage
+coverage/
+
+# Logs
+*.log
+logs/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Claude Code local settings
+.claude/
+
+# Local dev notes (not part of submission)
+TESTS.txt
